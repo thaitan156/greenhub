@@ -381,12 +381,26 @@ function MapScreen({posts,viewer,matTran,onSelectMt,onSelectCenter,logoUrl,onUpl
       </svg>
       <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}}>
         <defs><filter id="glow"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-        {matTran.map(t=><line key={`hq-${t.id}`} x1={`${t.x}%`} y1={`${t.y}%`} x2="47%" y2="40%" stroke={t.color} strokeWidth="1.5" strokeOpacity=".2"/>)}
-        {matTran.map((t,i)=>{const t2=matTran[(i+1)%matTran.length];return <line key={`ln-${t.id}`} x1={`${t.x}%`} y1={`${t.y}%`} x2={`${t2.x}%`} y2={`${t2.y}%`} stroke={C.priL} strokeWidth="2" strokeOpacity=".4" filter="url(#glow)"/>;})}
+        {matTran.map((t,idx)=>{
+          const total=matTran.length;
+          const angle=(idx/total)*2*Math.PI-Math.PI/2;
+          const rx=total<=6?32:total<=10?36:38, ry=total<=6?26:total<=10?28:30;
+          const px=47+rx*Math.cos(angle), py=38+ry*Math.sin(angle);
+          return <line key={`hq-${t.id}`} x1={`${px}%`} y1={`${py}%`} x2="47%" y2="38%" stroke={t.color} strokeWidth="1.5" strokeOpacity=".25"/>;
+        })}
+        {matTran.map((t,i)=>{
+          const total=matTran.length;
+          const a1=(i/total)*2*Math.PI-Math.PI/2;
+          const a2=((i+1)/total)*2*Math.PI-Math.PI/2;
+          const rx=total<=6?32:total<=10?36:38, ry=total<=6?26:total<=10?28:30;
+          const x1=47+rx*Math.cos(a1),y1=38+ry*Math.sin(a1);
+          const x2=47+rx*Math.cos(a2),y2=38+ry*Math.sin(a2);
+          return <line key={`ln-${t.id}`} x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke={C.priL} strokeWidth="2" strokeOpacity=".4" filter="url(#glow)"/>;
+        })}
       </svg>
 
       {/* CENTER LOGO */}
-      <div style={{position:"absolute",left:"47%",top:"40%",transform:"translate(-50%,-50%)",display:"flex",flexDirection:"column",alignItems:"center",gap:6,zIndex:5}}>
+      <div style={{position:"absolute",left:"47%",top:"38%",transform:"translate(-50%,-50%)",display:"flex",flexDirection:"column",alignItems:"center",gap:6,zIndex:5}}>
         <div style={{position:"relative"}} onClick={onSelectCenter}>
           <div style={{width:110,height:110,borderRadius:"50%",background:logoUrl?"transparent":`linear-gradient(135deg,${C.pri},${C.priD})`,boxShadow:`0 0 0 10px ${C.pri}33,0 0 0 20px ${C.pri}11,0 4px 32px ${C.pri}77`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:46,border:`4px solid #fff`,cursor:"pointer",animation:"hqPulse 3s infinite",overflow:"hidden"}}>
             {logoUrl?<img src={logoUrl} alt="logo" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:"🌿"}
@@ -399,11 +413,19 @@ function MapScreen({posts,viewer,matTran,onSelectMt,onSelectCenter,logoUrl,onUpl
 
       {/* TEAM NODES */}
       {matTran.map((mt,idx)=>{
+        // Auto-layout: evenly space all nodes in ellipse around center
+        const total=matTran.length;
+        const angle=(idx/total)*2*Math.PI - Math.PI/2; // start from top
+        const rx=total<=6?32:total<=10?36:38;
+        const ry=total<=6?26:total<=10?28:30;
+        const cx=47, cy=38;
+        const px=Math.round(cx+rx*Math.cos(angle));
+        const py=Math.round(cy+ry*Math.sin(angle));
         const cnt=posts.filter(p=>p.matTranId===mt.id).length;
         const unread=posts.filter(p=>p.matTranId===mt.id&&now()-p.createdAt<3600000).length;
         const isH=hov===mt.id;
         return (
-          <div key={mt.id} style={{position:"absolute",left:`${mt.x}%`,top:`${mt.y}%`,transform:"translate(-50%,-50%)",cursor:"pointer",zIndex:10,display:"flex",flexDirection:"column",alignItems:"center",gap:6,animation:`floatNode 3s ease-in-out ${idx*.3}s infinite`}}
+          <div key={mt.id} style={{position:"absolute",left:`${px}%`,top:`${py}%`,transform:"translate(-50%,-50%)",cursor:"pointer",zIndex:10,display:"flex",flexDirection:"column",alignItems:"center",gap:6,animation:`floatNode 3s ease-in-out ${idx*.3}s infinite`}}
             onClick={()=>onSelectMt(mt)} onMouseEnter={()=>setHov(mt.id)} onMouseLeave={()=>setHov(null)}>
             {isH&&<div style={{position:"absolute",width:68,height:68,borderRadius:"50%",border:`2px solid ${mt.color}`,animation:"ring 1s infinite",top:"50%",left:"50%",transform:"translate(-50%,-50%)",pointerEvents:"none"}}/>}
             <div style={{width:isH?56:46,height:isH?56:46,borderRadius:"50%",background:isH?`linear-gradient(135deg,${mt.color},${mt.color}cc)`:`linear-gradient(135deg,${mt.color}cc,${mt.color}88)`,boxShadow:isH?`0 0 0 6px ${mt.color}33,0 6px 24px ${mt.color}88`:`0 0 0 3px ${mt.color}22,0 3px 12px ${mt.color}55`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:isH?26:22,transition:"all .25s",border:`2.5px solid ${mt.color}dd`,position:"relative"}}>
@@ -743,7 +765,15 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
                 <option value="khongthuongtru">🔄 Không thường trực</option>
               </select>
             </div>
-            <Btn full onClick={()=>{if(!newMt.name.trim())return;onAddMt({...newMt,id:"mt"+uid(),x:Math.random()*65+10,y:Math.random()*55+10});setNewMt({name:"",emoji:"🌿",color:"#16a34a",loaiHinh:"thuongtru"});}}>Thêm mặt trận</Btn>
+            <Btn full onClick={()=>{if(!newMt.name.trim())return;(()=>{
+                  // Place new node in circle, spaced from existing ones
+                  const existing=matTran.length;
+                  const angle=(existing*(360/(Math.max(existing+1,8))))*(Math.PI/180);
+                  const rx=34, ry=28; // ellipse radii around center 47,40
+                  const nx=Math.round(47+rx*Math.cos(angle));
+                  const ny=Math.round(40+ry*Math.sin(angle));
+                  onAddMt({...newMt,id:"mt"+uid(),x:Math.max(5,Math.min(90,nx)),y:Math.max(8,Math.min(75,ny))});
+                })();setNewMt({name:"",emoji:"🌿",color:"#16a34a",loaiHinh:"thuongtru"});}}>Thêm mặt trận</Btn>
           </div>
 
           {/* List + Edit/Delete */}
