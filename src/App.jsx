@@ -25,6 +25,13 @@ const LOAI_HINH = [
   { id:"thuongtru",      label:"Thường trực" },
   { id:"khongthuongtru", label:"Không thường trực" },
 ];
+const DEFAULT_DON_VI = [
+  {id:"dv1",type:"Khoa",ten:"Khoa Xây dựng"},
+  {id:"dv2",type:"Khoa",ten:"Khoa Công nghệ thông tin"},
+  {id:"dv3",type:"Khoa",ten:"Khoa Cơ khí"},
+  {id:"dv4",type:"Viện",ten:"Viện Kỹ thuật"},
+  {id:"dv5",type:"CLB",ten:"CLB Tình nguyện"},
+];
 
 const SEED_MAT_TRAN = [
   { id:"mt1", name:"Mặt trận Gò Vấp",     color:"#16a34a", emoji:"🌿", x:18, y:22, loaiHinh:"thuongtru" },
@@ -236,11 +243,24 @@ function PostCard({post,viewer,allUsers,matTran,onLike,onComment}) {
         <div style={{padding:"16px 18px 0"}}>
           <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
             <div style={{width:48,height:48,borderRadius:"50%",fontSize:22,background:`${mt?.color||C.pri}22`,border:`2px solid ${mt?.color||C.pri}44`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              {isAnon&&!reveal?"🕵️":"🌿"}
+              {isAnon&&!reveal?"🕵️":(author?.avatarUrl?<img src={author.avatarUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"50%"}}/>:"🌿")}
             </div>
             <div style={{flex:1}}>
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <span style={{fontWeight:800,color:C.txt,fontSize:16}}>{dispName}</span>
+                {!isAnon&&author?.status?.text&&now()-author.status.time<86400000&&
+                  (author.status.scope==="all" || (author.status.scope==="front" && author.matTranId===post.matTranId))&&(
+                  <span style={{
+                    fontSize:12,fontWeight:600,
+                    color:author.status.scope==="front"?"#3b82f6":C.mid,
+                    background:author.status.scope==="front"?"#eff6ff":C.deep,
+                    padding:"2px 9px",borderRadius:20,
+                    maxWidth:180,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",
+                    display:"inline-block"
+                  }}>
+                    {author.status.scope==="front"?"🏕️":"💬"} {author.status.text}
+                  </span>
+                )}
                 {isAnon&&!reveal&&<Badge color="#64748b" size={12}>ẩn danh</Badge>}
                 {isAnon&&reveal&&<Badge color={C.err} size={12}>🔓 chỉ bạn thấy</Badge>}
               </div>
@@ -719,7 +739,7 @@ function EditMtForm({mt, onSave, onCancel}) {
 // ═══════════════════════════════════════════════
 //  ADMIN SCREEN (full CRUD)
 // ═══════════════════════════════════════════════
-function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdateRole,marqueeText,onSaveMarquee,logoUrl,onUploadLogo}) {
+function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdateRole,marqueeText,onSaveMarquee,logoUrl,onUploadLogo,donViList=DEFAULT_DON_VI,onSaveDonVi}) {
   const [tab,setTab]=useState("dashboard");
   const [search,setSearch]=useState("");
   const [marq,setMarq]=useState(marqueeText||"");
@@ -727,6 +747,7 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
   const [editMt,setEditMt]=useState(null);
   const [showCreateUser,setShowCreateUser]=useState(false);
   const [editUser,setEditUser]=useState(null);
+  const [newDv,setNewDv]=useState({type:"Khoa",ten:""});
   const logoRef=useRef();
   const handleLogo=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onUploadLogo(ev.target.result);r.readAsDataURL(f);};
 
@@ -802,6 +823,16 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
                       <Badge color={u.loaiHinh==="thuongtru"?C.pri:"#94a3b8"} size={13}>{u.loaiHinh==="thuongtru"?"Thường trực":"Không TT"}</Badge>
                     </div>
                     <div style={{color:"#94a3b8",fontSize:13,marginTop:6}}>{u.mssv} · {u.email}</div>
+                  {u.status?.text&&now()-u.status.time<86400000&&(
+                    <div style={{display:"flex",gap:6,alignItems:"center",marginTop:4}}>
+                      <span style={{fontSize:12,color:u.status.scope==="front"?"#3b82f6":C.mid}}>
+                        {u.status.scope==="front"?"🏕️":"💬"} {u.status.text}
+                      </span>
+                      <span style={{fontSize:11,color:"#94a3b8"}}>
+                        · còn {Math.max(0,Math.ceil((86400000-(now()-u.status.time))/3600000))}h
+                      </span>
+                    </div>
+                  )}
                   </div>
                   <div style={{display:"flex",gap:8,flexShrink:0}}>
                     <select value={u.role} onChange={e=>onUpdateRole(u.id,e.target.value)} style={{background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"6px 10px",fontSize:13,color:C.txt,outline:"none"}}>
@@ -905,7 +936,46 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
             </div>
           </div>
 
-          {/* Units info */}
+          {/* DonVi Management */}
+          <div style={{background:"#fff",borderRadius:18,padding:"20px",marginBottom:16,border:`1px solid ${C.bdr}`}}>
+            <div style={{fontWeight:800,color:C.txt,fontSize:16,marginBottom:14}}>🏫 Quản lý đơn vị</div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <select value={newDv.type} onChange={e=>setNewDv(f=>({...f,type:e.target.value}))} style={{background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.txt,outline:"none",flexShrink:0}}>
+                {["Khoa","Viện","CLB"].map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+              <input value={newDv.ten} onChange={e=>setNewDv(f=>({...f,ten:e.target.value}))}
+                placeholder="Tên đơn vị..." onKeyDown={e=>{
+                  if(e.key==="Enter"&&newDv.ten.trim()){
+                    onSaveDonVi([...donViList,{id:"dv"+uid(),type:newDv.type,ten:newDv.ten.trim()}]);
+                    setNewDv(f=>({...f,ten:""}));
+                  }
+                }}
+                style={{flex:1,background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.txt,outline:"none"}}/>
+              <button onClick={()=>{
+                if(!newDv.ten.trim())return;
+                onSaveDonVi([...donViList,{id:"dv"+uid(),type:newDv.type,ten:newDv.ten.trim()}]);
+                setNewDv(f=>({...f,ten:""}));
+              }} style={{background:C.pri,border:"none",borderRadius:10,padding:"10px 16px",cursor:"pointer",color:"#fff",fontWeight:800,fontSize:14,flexShrink:0}}>+ Thêm</button>
+            </div>
+            {["Khoa","Viện","CLB"].map(type=>{
+              const items=donViList.filter(d=>d.type===type);
+              if(!items.length) return null;
+              return (
+                <div key={type} style={{marginBottom:12}}>
+                  <div style={{fontWeight:700,color:C.mid,fontSize:13,marginBottom:6}}>{type}</div>
+                  {items.map(d=>(
+                    <div key={d.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:C.bg,borderRadius:8,marginBottom:5}}>
+                      <span style={{flex:1,color:C.txt,fontSize:14}}>{d.ten}</span>
+                      <button onClick={()=>onSaveDonVi(donViList.filter(x=>x.id!==d.id))}
+                        style={{background:"none",border:"none",cursor:"pointer",color:C.err,fontSize:16,padding:"0 4px"}}>🗑️</button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Units stats */}
           <div style={{background:"#fff",borderRadius:18,padding:"20px",border:`1px solid ${C.bdr}`}}>
             <div style={{fontWeight:800,color:C.txt,fontSize:16,marginBottom:14}}>🏫 Thống kê đơn vị</div>
             {["Khoa","Viện","CLB"].map(type=>{
@@ -931,7 +1001,7 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
         </>}
       </div>
       {/* CREATE USER MODAL */}
-      {showCreateUser&&<CreateUserModal matTran={matTran} onClose={()=>setShowCreateUser(false)} onSave={async(data)=>{
+      {showCreateUser&&<CreateUserModal matTran={matTran} donViList={donViList} onClose={()=>setShowCreateUser(false)} onSave={async(data)=>{
         const users=await db.get("users")||{};
         if(Object.values(users).find(u=>u.email===data.email)){alert("Email đã tồn tại!");return;}
         const id=uid();
@@ -991,11 +1061,21 @@ function StatsScreen({posts,allUsers,matTran}) {
 // ═══════════════════════════════════════════════
 //  PROFILE SCREEN
 // ═══════════════════════════════════════════════
-function ProfileScreen({viewer,posts,matTran,onLogout,onChangePwd}) {
+function ProfileScreen({viewer,posts,matTran,onLogout,onChangePwd,onUpdateProfile}) {
   const [showPwd,setShowPwd]=useState(false);
   const [oldPwd,setOldPwd]=useState("");
   const [newPwd,setNewPwd]=useState("");
   const [pwdMsg,setPwdMsg]=useState("");
+  const [statusText,setStatusText]=useState(viewer?.status?.text||"");
+  const [statusScope,setStatusScope]=useState(viewer?.status?.scope||"all");
+  const [showStatusEdit,setShowStatusEdit]=useState(false);
+  const avatarRef=useRef();
+  const handleAvatar=e=>{
+    const f=e.target.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=ev=>onUpdateProfile({avatarUrl:ev.target.result});
+    r.readAsDataURL(f);
+  };
   const myPosts=posts.filter(p=>p.authorId===viewer.id).sort((a,b)=>b.createdAt-a.createdAt);
   const ri=getRoleInfo(viewer.role);
   const mt=matTran.find(m=>m.id===viewer.matTranId);
@@ -1009,7 +1089,15 @@ function ProfileScreen({viewer,posts,matTran,onLogout,onChangePwd}) {
     <div style={{height:"100%",overflowY:"auto",padding:"18px 14px 80px",boxSizing:"border-box"}}>
       <div style={{background:`linear-gradient(135deg,${C.pri},${C.priD})`,borderRadius:20,padding:"22px",marginBottom:18,color:"#fff"}}>
         <div style={{display:"flex",alignItems:"center",gap:16}}>
-          <div style={{width:60,height:60,borderRadius:"50%",background:"#ffffff33",border:"2px solid #ffffff66",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30}}>🌿</div>
+          <div style={{position:"relative",flexShrink:0}}>
+            <div style={{width:64,height:64,borderRadius:"50%",background:"#ffffff33",border:"3px solid #ffffff88",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,overflow:"hidden"}}>
+              {viewer?.avatarUrl
+                ? <img src={viewer.avatarUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                : "🌿"}
+            </div>
+            <div onClick={()=>avatarRef.current?.click()} style={{position:"absolute",bottom:0,right:0,width:22,height:22,borderRadius:"50%",background:"#fff",border:"2px solid #16a34a",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:12}}>📷</div>
+            <input ref={avatarRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleAvatar}/>
+          </div>
           <div style={{flex:1}}>
             <div style={{fontWeight:900,fontSize:20}}>{viewer.hoTen}</div>
             <div style={{opacity:.8,fontSize:14,marginTop:3}}>{viewer.mssv} · {viewer.donViType} {viewer.donViTen}</div>
@@ -1025,6 +1113,59 @@ function ProfileScreen({viewer,posts,matTran,onLogout,onChangePwd}) {
             <div key={s.l} style={{textAlign:"center",flex:1}}><div style={{fontWeight:900,fontSize:24}}>{s.v}</div><div style={{opacity:.7,fontSize:13}}>{s.l}</div></div>
           ))}
         </div>
+      </div>
+
+      {/* Status */}
+      <div style={{background:"#fff",borderRadius:18,padding:"16px 18px",marginBottom:14,border:`1px solid ${C.bdr}`}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:showStatusEdit?12:0}}>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,color:C.txt,fontSize:15}}>💬 Trạng thái của bạn</div>
+            {viewer?.status?.text&&now()-viewer.status.time<86400000&&(
+              <div style={{marginTop:6}}>
+                <div style={{color:C.mid,fontSize:14}}>"{viewer.status.text}"</div>
+                <div style={{marginTop:4}}>
+                  <span style={{fontSize:11,background:viewer.status.scope==="front"?"#eff6ff":"#f0fdf4",color:viewer.status.scope==="front"?"#3b82f6":C.pri,padding:"2px 8px",borderRadius:20,fontWeight:700}}>
+                    {viewer.status.scope==="front"?"🏕️ Chỉ mặt trận":"🌍 Toàn chiến dịch"} · còn {Math.max(0,Math.ceil((86400000-(now()-viewer.status.time))/3600000))}h
+                  </span>
+                </div>
+              </div>
+            )}
+            {(!viewer?.status?.text||(now()-viewer.status?.time>86400000))&&!showStatusEdit&&(
+              <div style={{color:"#94a3b8",fontSize:13,marginTop:3}}>Chưa có trạng thái hôm nay</div>
+            )}
+          </div>
+          <button onClick={()=>setShowStatusEdit(!showStatusEdit)} style={{background:C.deep,border:`1px solid ${C.bdrM}`,borderRadius:10,padding:"6px 12px",cursor:"pointer",color:C.pri,fontWeight:700,fontSize:13}}>✏️</button>
+        </div>
+        {showStatusEdit&&(
+          <div>
+            <input value={statusText} onChange={e=>setStatusText(e.target.value)}
+              placeholder="Hôm nay bạn đang làm gì?..." maxLength={80}
+              style={{width:"100%",boxSizing:"border-box",background:C.bg,border:`2px solid ${C.bdrM}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.txt,outline:"none",marginBottom:10}}/>
+            {/* Scope selector */}
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              {[
+                {v:"all",   label:"🌍 Toàn chiến dịch"},
+                {v:"front", label:"🏕️ Chỉ mặt trận tôi"},
+              ].map(s=>(
+                <button key={s.v} onClick={()=>setStatusScope(s.v)} style={{
+                  flex:1, padding:"8px 0", borderRadius:10, border:"none",
+                  cursor:"pointer", fontSize:13, fontWeight:700,
+                  background:statusScope===s.v?C.pri:"#f1f5f9",
+                  color:statusScope===s.v?"#fff":"#94a3b8"
+                }}>{s.label}</button>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{
+                if(!statusText.trim())return;
+                onUpdateProfile({status:{text:statusText.trim(),time:now(),scope:statusScope}});
+                setShowStatusEdit(false);
+              }} style={{flex:2,background:C.pri,border:"none",borderRadius:10,padding:"10px 0",cursor:"pointer",color:"#fff",fontWeight:800,fontSize:14}}>💾 Lưu trạng thái</button>
+              <button onClick={()=>{onUpdateProfile({status:null});setStatusText("");setShowStatusEdit(false);}}
+                style={{flex:1,background:"#fef2f2",border:"none",borderRadius:10,padding:"10px 0",cursor:"pointer",color:C.err,fontWeight:700,fontSize:13}}>Xóa</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{background:"#fff",borderRadius:18,padding:"18px",marginBottom:16,border:`1px solid ${C.bdr}`}}>
@@ -1231,14 +1372,14 @@ function LoginScreen({onLogin,onGoRegister,onForgotPwd,logoUrl}) {
 // ═══════════════════════════════════════════════
 //  REGISTER SCREEN
 // ═══════════════════════════════════════════════
-function RegisterScreen({onBack,onSuccess,matTran}) {
+function RegisterScreen({onBack,onSuccess,matTran,donViList=DEFAULT_DON_VI}) {
   const [step,setStep]=useState(1);
   const [form,setForm]=useState({email:"",sdt:"",mssv:"",donViType:"Khoa",donViTen:"",cccd:"",ngayCap:"",matTranId:"",loaiHinh:"thuongtru",hoTen:""});
   const [err,setErr]=useState({});
   const [loading,setLoading]=useState(false);
   const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
   const v1=()=>{const e={};if(!form.hoTen.trim())e.hoTen="Vui lòng nhập họ tên";if(!form.email.includes("@"))e.email="Email không hợp lệ";if(form.sdt.length<9)e.sdt="SĐT không hợp lệ";if(!form.mssv.trim())e.mssv="Vui lòng nhập MSSV/MSNV";setErr(e);return!Object.keys(e).length;};
-  const v2=()=>{const e={};if(!form.donViTen.trim())e.donViTen="Vui lòng nhập đơn vị";if(form.cccd.length<12)e.cccd="CCCD cần 12 số";if(!form.ngayCap)e.ngayCap="Vui lòng chọn ngày cấp";if(!form.matTranId)e.matTranId="Vui lòng chọn mặt trận";setErr(e);return!Object.keys(e).length;};
+  const v2=()=>{const e={};if(!form.donViTen.trim()||form.donViTen==="")e.donViTen="Vui lòng chọn đơn vị";if(form.cccd.length<12)e.cccd="CCCD cần 12 số";if(!form.ngayCap)e.ngayCap="Vui lòng chọn ngày cấp";if(!form.matTranId)e.matTranId="Vui lòng chọn mặt trận";setErr(e);return!Object.keys(e).length;};
   const submit=async()=>{if(!v2())return;setLoading(true);const res=await authUsers.register({...form,email:form.email.trim().toLowerCase()});setLoading(false);if(res.error)setErr({submit:res.error});else onSuccess(res.user);};
   return (
     <div style={{position:"fixed",inset:0,background:`linear-gradient(160deg,${C.priD},${C.pri} 50%,${C.acc})`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px 16px",overflowY:"auto",fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
@@ -1250,9 +1391,21 @@ function RegisterScreen({onBack,onSuccess,matTran}) {
           {err.submit&&<div style={{background:C.errBg,color:C.err,padding:"12px 16px",borderRadius:12,fontSize:14,marginBottom:16,fontWeight:700}}>{err.submit}</div>}
           {step===1&&<><Input label="Họ và tên *" placeholder="Nguyễn Văn A" value={form.hoTen} onChange={e=>upd("hoTen",e.target.value)} error={err.hoTen}/><Input label="Email *" type="email" placeholder="21xxxxxx@st.iuh.edu.vn" value={form.email} onChange={e=>upd("email",e.target.value)} error={err.email}/><Input label="Số điện thoại *" type="tel" placeholder="09xxxxxxxx" value={form.sdt} onChange={e=>upd("sdt",e.target.value)} error={err.sdt}/><Input label="MSSV/MSNV *" placeholder="21xxxxxxxx / GV..." value={form.mssv} onChange={e=>upd("mssv",e.target.value)} error={err.mssv}/><Btn full onClick={()=>{if(v1())setStep(2);}}>Tiếp theo →</Btn></>}
           {step===2&&<>
-            <div style={{display:"flex",gap:10,marginBottom:16}}>
-              <div style={{flex:1}}><Select label="Loại đơn vị *" value={form.donViType} options={["Khoa","Viện","CLB"].map(d=>({value:d,label:d}))} onChange={e=>upd("donViType",e.target.value)}/></div>
-              <div style={{flex:2}}><Input label="Tên đơn vị *" placeholder="Khoa Xây dựng" value={form.donViTen} onChange={e=>upd("donViTen",e.target.value)} error={err.donViTen}/></div>
+            <div style={{marginBottom:16}}>
+              <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:15,marginBottom:6}}>Đơn vị *</label>
+              <select value={form.donViTen+"__"+form.donViType}
+                onChange={e=>{const[ten,type]=e.target.value.split("__");upd("donViTen",ten);upd("donViType",type);}}
+                style={{width:"100%",background:C.bg,border:`2px solid ${err.donViTen?C.err:C.bdr}`,borderRadius:12,padding:"13px 16px",fontSize:16,color:form.donViTen?C.txt:"#94a3b8",outline:"none",boxSizing:"border-box"}}>
+                <option value="__">-- Chọn đơn vị của bạn --</option>
+                {["Khoa","Viện","CLB"].map(type=>(
+                  <optgroup key={type} label={type}>
+                    {donViList.filter(d=>d.type===type).map(d=>(
+                      <option key={d.id} value={d.ten+"__"+d.type}>{d.ten}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {err.donViTen&&<div style={{color:C.err,fontSize:13,marginTop:4}}>{err.donViTen}</div>}
             </div>
             <Input label="Số CCCD * (12 số)" placeholder="0xxxxxxxxxx" value={form.cccd} onChange={e=>upd("cccd",e.target.value.replace(/\D/g,""))} error={err.cccd}/>
             <Input label="Ngày cấp CCCD *" type="date" value={form.ngayCap} onChange={e=>upd("ngayCap",e.target.value)} error={err.ngayCap}/>
@@ -1338,6 +1491,7 @@ export default function App() {
     const p=await db.get("posts");       if(p) setPosts(p);
     const m=await db.get("matTran");     if(m) setMatTran(m);
     const lg=await db.get("logoUrl");    if(lg) setLogoUrl(lg);
+    const dv=await db.get("donViList");  if(dv) setDonViList(dv);
     const mq=await db.get("marquee");    if(mq) setMarquee(mq);
     const v=await db.get("session");
     if(v){const users=await db.get("users")||{};const ok=Object.values(users).find(u=>u.id===v.id);if(ok){setViewer(ok);setScreen("map");}else await db.set("session",null);}
@@ -1361,6 +1515,7 @@ export default function App() {
   const logout=async()=>{setViewer(null);await db.set("session",null);setScreen("auth");};
   const changePwd=async pwd=>{const u=await authUsers.update(viewer.id,{password:hashPwd(pwd)});setViewer(u);await db.set("session",u);const users=await db.get("users")||{};setAllUsers(users);};
   const uploadLogo=async url=>{setLogoUrl(url);await db.set("logoUrl",url);};
+  const saveDonVi=async list=>{setDonViList(list);await db.set("donViList",list);};
   const saveMarquee=async txt=>{setMarquee(txt);await db.set("marquee",txt);};
 
   const addPost=async data=>{
@@ -1390,7 +1545,7 @@ export default function App() {
   );
 
   if(screen==="auth") return <LoginScreen onLogin={login} onGoRegister={()=>setScreen("register")} onForgotPwd={()=>setScreen("forgotpwd")} logoUrl={logoUrl}/>;
-  if(screen==="register") return <RegisterScreen onBack={()=>setScreen("auth")} onSuccess={login} matTran={matTran}/>;
+  if(screen==="register") return <RegisterScreen onBack={()=>setScreen("auth")} onSuccess={login} matTran={matTran} donViList={donViList}/>;
   if(screen==="forgotpwd") return <ForgotPwdScreen onBack={()=>setScreen("auth")} onSubmit={async(email)=>{
     const users=await db.get("users")||{};
     const u=Object.values(users).find(u=>u.email===email);
@@ -1436,7 +1591,7 @@ export default function App() {
         {screen==="map"&&!feedMt&&<MapScreen posts={posts} viewer={viewer} matTran={matTran} onSelectMt={m=>{setFeedMt(m.id);setScreen("feed");}} onSelectCenter={()=>{setFeedMt(null);setScreen("feed");}} logoUrl={logoUrl} onUploadLogo={uploadLogo}/>}
         {screen==="feed"&&<FeedScreen posts={posts} viewer={viewer} allUsers={allUsers} matTran={matTran} filterMt={feedMt} onLike={doLike} onComment={doComment} onBack={()=>{setScreen("map");setFeedMt(null);}}/>}
         {screen==="stats"&&rl>=5&&<div style={{height:"100%",overflowY:"auto"}}><StatsScreen posts={posts} allUsers={allUsers} matTran={matTran}/></div>}
-        {screen==="admin"&&rl>=7&&<AdminScreen allUsers={allUsers} matTran={matTran} posts={posts} onAddMt={addMt} onEditMt={editMt} onDeleteMt={deleteMt} onUpdateRole={updateRole} marqueeText={marqueeText} onSaveMarquee={saveMarquee} logoUrl={logoUrl} onUploadLogo={uploadLogo}/>}
+        {screen==="admin"&&rl>=7&&<AdminScreen allUsers={allUsers} matTran={matTran} posts={posts} onAddMt={addMt} onEditMt={editMt} onDeleteMt={deleteMt} onUpdateRole={updateRole} marqueeText={marqueeText} onSaveMarquee={saveMarquee} logoUrl={logoUrl} onUploadLogo={uploadLogo} donViList={donViList} onSaveDonVi={saveDonVi}/>}
         {screen==="profile"&&<ProfileScreen viewer={viewer} posts={posts} matTran={matTran} onLogout={logout} onChangePwd={changePwd}/>}
       </div>
 
