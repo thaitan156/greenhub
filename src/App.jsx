@@ -338,15 +338,49 @@ function ComposeModal({viewer,matTran,onSubmit,onClose}) {
 }
 
 // ═══════════════════════════════════════════════
-//  COUNTDOWN SMALL (for top bar)
+//  COUNTDOWN PILL — nhỏ gọn, thanh lịch
 // ═══════════════════════════════════════════════
-function CountdownSmall() {
-  const [cd,setCd]=useState(getCountdown());
-  useEffect(()=>{const t=setInterval(()=>setCd(getCountdown()),1000);return()=>clearInterval(t);},[]);
-  if(cd.done) return <div style={{color:"#4ade80",fontWeight:900,fontSize:15}}>🎉 Kết thúc!</div>;
+function CountdownPill() {
+  const [cd,setCd] = useState(getCountdown());
+  useEffect(()=>{ const t=setInterval(()=>setCd(getCountdown()),1000); return()=>clearInterval(t); },[]);
+  if(cd.done) return (
+    <div style={{display:"flex",justifyContent:"center",padding:"6px 0",flexShrink:0}}>
+      <div style={{background:`linear-gradient(135deg,${C.priL},${C.pri})`,color:"#fff",fontSize:13,fontWeight:800,padding:"6px 18px",borderRadius:20,boxShadow:`0 2px 10px ${C.pri}44`}}>
+        🎉 Chiến dịch kết thúc!
+      </div>
+    </div>
+  );
+  const pct = Math.min(100,Math.round((cd.gone/cd.total)*100));
   return (
-    <div style={{color:"#fff",fontWeight:900,fontSize:18,fontVariantNumeric:"tabular-nums",letterSpacing:1,textShadow:"0 2px 8px #0003"}}>
-      {cd.days}d {String(cd.hours).padStart(2,"0")}:{String(cd.mins).padStart(2,"0")}:{String(cd.secs).padStart(2,"0")}
+    <div style={{display:"flex",justifyContent:"center",padding:"6px 16px",flexShrink:0}}>
+      <div style={{
+        display:"flex", alignItems:"center", gap:10,
+        background:"#fff", borderRadius:30,
+        padding:"6px 16px 6px 10px",
+        boxShadow:`0 2px 12px ${C.pri}22`,
+        border:`1px solid ${C.bdr}`,
+        maxWidth:420, width:"100%"
+      }}>
+        {/* Icon + day */}
+        <div style={{
+          background:`linear-gradient(135deg,${C.priL},${C.pri})`,
+          borderRadius:20, padding:"4px 10px",
+          color:"#fff", fontSize:12, fontWeight:800, whiteSpace:"nowrap", flexShrink:0
+        }}>⏳ Ngày {cd.gone}/{cd.total}</div>
+
+        {/* Progress bar */}
+        <div style={{flex:1,background:C.bg,borderRadius:10,height:6,overflow:"hidden"}}>
+          <div style={{height:6,borderRadius:10,background:`linear-gradient(90deg,${C.priL},${C.pri})`,width:`${pct}%`,transition:"width 1s"}}/>
+        </div>
+
+        {/* Countdown digits */}
+        <div style={{
+          fontWeight:900, fontSize:14, color:C.pri,
+          fontVariantNumeric:"tabular-nums", letterSpacing:.5, flexShrink:0
+        }}>
+          {cd.days}d {String(cd.hours).padStart(2,"0")}:{String(cd.mins).padStart(2,"0")}:{String(cd.secs).padStart(2,"0")}
+        </div>
+      </div>
     </div>
   );
 }
@@ -361,19 +395,7 @@ function MapScreen({posts,viewer,matTran,onSelectMt,onSelectCenter,logoUrl,onUpl
   const handleLogo=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onUploadLogo(ev.target.result);r.readAsDataURL(f);};
   return (
     <div style={{width:"100%",height:"100%",display:"flex",flexDirection:"column"}}>
-    {viewer?.loaiHinh==="thuongtru"&&(
-      <div style={{
-        background:`linear-gradient(90deg,${C.priD},${C.pri})`,
-        padding:"10px 18px", flexShrink:0,
-        display:"flex", alignItems:"center", justifyContent:"space-between"
-      }}>
-        <div style={{color:"#bbf7d0",fontSize:13,fontWeight:700}}>
-          ⏳ MHX 2026 · Ngày {getCountdown().gone}/{getCountdown().total}
-        </div>
-        <CountdownSmall/>
-        <div style={{color:"#bbf7d0",fontSize:12}}>{getCountdown().done?"Kết thúc!":getCountdown().gone===0?"Chưa bắt đầu":`${Math.min(100,Math.round((getCountdown().gone/getCountdown().total)*100))}% hoàn thành`}</div>
-      </div>
-    )}
+    {viewer?.loaiHinh==="thuongtru"&&<CountdownPill/>}
     <div style={{flex:1,position:"relative",overflow:"hidden",background:`linear-gradient(160deg,${C.deep} 0%,#e8faf0 50%,${C.bg} 100%)`}}>
       <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:.35}}>
         <defs><pattern id="dots" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill={C.bdrM}/></pattern></defs>
@@ -641,6 +663,59 @@ function EditUserModal({user, matTran, onClose, onSave}) {
   );
 }
 
+
+// ═══════════════════════════════════════════
+//  EDIT MT FORM (local state để tránh re-render)
+// ═══════════════════════════════════════════
+function EditMtForm({mt, onSave, onCancel}) {
+  const [form, setForm] = useState({
+    name:     mt.name     || "",
+    emoji:    mt.emoji    || "🌿",
+    color:    mt.color    || "#16a34a",
+    loaiHinh: mt.loaiHinh || "thuongtru",
+  });
+  const upd = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  return (
+    <div>
+      <Input label="Tên mặt trận" value={form.name}
+        onChange={e=>upd("name",e.target.value)}/>
+
+      <div style={{display:"flex",gap:10,marginBottom:14}}>
+        <div style={{flex:1}}>
+          <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Emoji</label>
+          <input value={form.emoji} onChange={e=>upd("emoji",e.target.value)}
+            style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:12,
+              padding:"10px",fontSize:22,textAlign:"center",outline:"none",boxSizing:"border-box"}}/>
+        </div>
+        <div style={{flex:1}}>
+          <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Màu sắc</label>
+          <input type="color" value={form.color} onChange={e=>upd("color",e.target.value)}
+            style={{width:"100%",height:46,border:`2px solid ${C.bdr}`,borderRadius:12,cursor:"pointer"}}/>
+        </div>
+      </div>
+
+      <div style={{marginBottom:14}}>
+        <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>
+          Loại hình mặt trận
+        </label>
+        <select value={form.loaiHinh} onChange={e=>upd("loaiHinh",e.target.value)}
+          style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,
+            borderRadius:12,padding:"12px 14px",fontSize:15,color:C.txt,
+            outline:"none",boxSizing:"border-box"}}>
+          <option value="thuongtru">📌 Thường trực</option>
+          <option value="khongthuongtru">🔄 Không thường trực</option>
+        </select>
+      </div>
+
+      <div style={{display:"flex",gap:10}}>
+        <Btn variant="outline" style={{flex:1,padding:"10px"}} onClick={onCancel}>Hủy</Btn>
+        <Btn style={{flex:1,padding:"10px"}} onClick={()=>onSave({...mt,...form})}>✅ Lưu</Btn>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════
 //  ADMIN SCREEN (full CRUD)
 // ═══════════════════════════════════════════════
@@ -780,24 +855,7 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
           {matTran.map(m=>(
             <div key={m.id} style={{background:"#fff",borderRadius:16,padding:"14px 16px",marginBottom:10,border:`1px solid ${C.bdr}`}}>
               {editMt===m.id?(
-                <div>
-                  <Input label="Tên mặt trận" value={m.name} onChange={e=>onEditMt({...m,name:e.target.value})}/>
-                  <div style={{display:"flex",gap:10,marginBottom:12}}>
-                    <input value={m.emoji} onChange={e=>onEditMt({...m,emoji:e.target.value})} style={{flex:1,background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:12,padding:"10px",fontSize:22,textAlign:"center",outline:"none"}}/>
-                    <input type="color" value={m.color} onChange={e=>onEditMt({...m,color:e.target.value})} style={{flex:1,height:46,border:`2px solid ${C.bdr}`,borderRadius:12,cursor:"pointer"}}/>
-                  </div>
-                  <div style={{marginBottom:12}}>
-                    <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:6}}>Loại hình mặt trận</label>
-                    <select value={m.loaiHinh||"thuongtru"} onChange={e=>onEditMt({...m,loaiHinh:e.target.value})} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:12,padding:"11px 14px",fontSize:15,color:C.txt,outline:"none",boxSizing:"border-box"}}>
-                      <option value="thuongtru">📌 Thường trực</option>
-                      <option value="khongthuongtru">🔄 Không thường trực</option>
-                    </select>
-                  </div>
-                  <div style={{display:"flex",gap:10}}>
-                    <Btn variant="outline" style={{flex:1,padding:"10px"}} onClick={()=>setEditMt(null)}>Hủy</Btn>
-                    <Btn style={{flex:1,padding:"10px"}} onClick={()=>setEditMt(null)}>✅ Lưu</Btn>
-                  </div>
-                </div>
+                <EditMtForm mt={m} onSave={mt=>{onEditMt(mt);setEditMt(null);}} onCancel={()=>setEditMt(null)}/>
               ):(
                 <div style={{display:"flex",alignItems:"center",gap:12}}>
                   <div style={{width:44,height:44,borderRadius:"50%",background:`${m.color}22`,border:`2px solid ${m.color}55`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{m.emoji}</div>
