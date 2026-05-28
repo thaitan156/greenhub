@@ -563,13 +563,21 @@ function CreateUserModal({matTran, onClose, onSave}) {
           <Input label="Email *" type="email" placeholder="email@iuh.edu.vn" value={form.email} onChange={e=>upd("email",e.target.value)} error={err.email}/>
           <Input label="Số điện thoại" placeholder="09xxxxxxxx" value={form.sdt} onChange={e=>upd("sdt",e.target.value)}/>
           <Input label="MSSV/MSNV *" placeholder="21xxxxxxxx" value={form.mssv} onChange={e=>upd("mssv",e.target.value)} error={err.mssv}/>
-          <div>
-            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Loại đơn vị</label>
-            <select value={form.donViType} onChange={e=>upd("donViType",e.target.value)} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:C.txt,outline:"none",boxSizing:"border-box"}}>
-              {["Khoa","Viện","CLB"].map(d=><option key={d} value={d}>{d}</option>)}
+          <div style={{gridColumn:"1/-1"}}>
+            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Đơn vị</label>
+            <select value={form.donViTen+"__"+form.donViType}
+              onChange={e=>{const[ten,type]=e.target.value.split("__");upd("donViTen",ten);upd("donViType",type);}}
+              style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:form.donViTen?C.txt:"#94a3b8",outline:"none",boxSizing:"border-box"}}>
+              <option value="__">-- Chọn đơn vị --</option>
+              {["Khoa","Viện","CLB"].map(type=>(
+                <optgroup key={type} label={type}>
+                  {donViList.filter(d=>d.type===type).map(d=>(
+                    <option key={d.id} value={d.ten+"__"+d.type}>{d.ten}</option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </div>
-          <div style={{gridColumn:"1/-1"}}><Input label="Tên đơn vị" placeholder="Khoa Xây dựng" value={form.donViTen} onChange={e=>upd("donViTen",e.target.value)}/></div>
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:4}}>
@@ -607,7 +615,7 @@ function CreateUserModal({matTran, onClose, onSave}) {
 // ═══════════════════════════════════════════════
 //  EDIT USER MODAL (Admin sửa tài khoản)
 // ═══════════════════════════════════════════════
-function EditUserModal({user, matTran, onClose, onSave}) {
+function EditUserModal({user, matTran, donViList=DEFAULT_DON_VI, onClose, onSave}) {
   const [form,setForm]=useState({
     hoTen:user.hoTen||"",
     email:user.email||"",
@@ -642,13 +650,21 @@ function EditUserModal({user, matTran, onClose, onSave}) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:4}}>
           <Input label="SĐT" value={form.sdt} onChange={e=>upd("sdt",e.target.value)}/>
           <Input label="MSSV/MSNV" value={form.mssv} onChange={e=>upd("mssv",e.target.value)}/>
-          <div>
-            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Loại đơn vị</label>
-            <select value={form.donViType} onChange={e=>upd("donViType",e.target.value)} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:C.txt,outline:"none",boxSizing:"border-box"}}>
-              {["Khoa","Viện","CLB"].map(d=><option key={d} value={d}>{d}</option>)}
+          <div style={{gridColumn:"1/-1"}}>
+            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Đơn vị</label>
+            <select value={form.donViTen+"__"+form.donViType}
+              onChange={e=>{const[ten,type]=e.target.value.split("__");upd("donViTen",ten);upd("donViType",type);}}
+              style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:form.donViTen?C.txt:"#94a3b8",outline:"none",boxSizing:"border-box"}}>
+              <option value="__">-- Chọn đơn vị --</option>
+              {["Khoa","Viện","CLB"].map(type=>(
+                <optgroup key={type} label={type}>
+                  {donViList.filter(d=>d.type===type).map(d=>(
+                    <option key={d.id} value={d.ten+"__"+d.type}>{d.ten}</option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </div>
-          <Input label="Tên đơn vị" value={form.donViTen} onChange={e=>upd("donViTen",e.target.value)}/>
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
@@ -1012,7 +1028,7 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
       }}/>}
 
       {/* EDIT USER MODAL */}
-      {editUser&&<EditUserModal user={editUser} matTran={matTran} onClose={()=>setEditUser(null)} onSave={async(data)=>{
+      {editUser&&<EditUserModal user={editUser} matTran={matTran} donViList={donViList} onClose={()=>setEditUser(null)} onSave={async(data)=>{
         await authUsers.update(editUser.id,data);
         const users=await db.get("users")||{};
         onUpdateRole(editUser.id,data.role);
