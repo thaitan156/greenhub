@@ -79,6 +79,7 @@ const authUsers = {
     const users=await db.get("users")||{};
     const u=Object.values(users).find(u=>u.email===email);
     if(!u) return {error:"Email không tồn tại"};
+    if(u.locked) return {error:"Tài khoản đã bị khóa. Vui lòng liên hệ admin!"};
     if(u.password!==hashPwd(pwd)) return {error:"Mật khẩu không đúng"};
     return {user:u};
   },
@@ -337,6 +338,20 @@ function ComposeModal({viewer,matTran,onSubmit,onClose}) {
 }
 
 // ═══════════════════════════════════════════════
+//  COUNTDOWN SMALL (for top bar)
+// ═══════════════════════════════════════════════
+function CountdownSmall() {
+  const [cd,setCd]=useState(getCountdown());
+  useEffect(()=>{const t=setInterval(()=>setCd(getCountdown()),1000);return()=>clearInterval(t);},[]);
+  if(cd.done) return <div style={{color:"#4ade80",fontWeight:900,fontSize:15}}>🎉 Kết thúc!</div>;
+  return (
+    <div style={{color:"#fff",fontWeight:900,fontSize:18,fontVariantNumeric:"tabular-nums",letterSpacing:1,textShadow:"0 2px 8px #0003"}}>
+      {cd.days}d {String(cd.hours).padStart(2,"0")}:{String(cd.mins).padStart(2,"0")}:{String(cd.secs).padStart(2,"0")}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
 //  MAP SCREEN
 // ═══════════════════════════════════════════════
 function MapScreen({posts,viewer,matTran,onSelectMt,onSelectCenter,logoUrl,onUploadLogo}) {
@@ -345,7 +360,21 @@ function MapScreen({posts,viewer,matTran,onSelectMt,onSelectCenter,logoUrl,onUpl
   const todayCnt=posts.filter(p=>now()-p.createdAt<86400000).length;
   const handleLogo=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onUploadLogo(ev.target.result);r.readAsDataURL(f);};
   return (
-    <div style={{position:"relative",width:"100%",height:"100%",overflow:"hidden",background:`linear-gradient(160deg,${C.deep} 0%,#e8faf0 50%,${C.bg} 100%)`}}>
+    <div style={{width:"100%",height:"100%",display:"flex",flexDirection:"column"}}>
+    {viewer?.loaiHinh==="thuongtru"&&(
+      <div style={{
+        background:`linear-gradient(90deg,${C.priD},${C.pri})`,
+        padding:"10px 18px", flexShrink:0,
+        display:"flex", alignItems:"center", justifyContent:"space-between"
+      }}>
+        <div style={{color:"#bbf7d0",fontSize:13,fontWeight:700}}>
+          ⏳ MHX 2026 · Ngày {getCountdown().gone}/{getCountdown().total}
+        </div>
+        <CountdownSmall/>
+        <div style={{color:"#bbf7d0",fontSize:12}}>{getCountdown().done?"Kết thúc!":getCountdown().gone===0?"Chưa bắt đầu":`${Math.min(100,Math.round((getCountdown().gone/getCountdown().total)*100))}% hoàn thành`}</div>
+      </div>
+    )}
+    <div style={{flex:1,position:"relative",overflow:"hidden",background:`linear-gradient(160deg,${C.deep} 0%,#e8faf0 50%,${C.bg} 100%)`}}>
       <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:.35}}>
         <defs><pattern id="dots" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.2" fill={C.bdrM}/></pattern></defs>
         <rect width="100%" height="100%" fill="url(#dots)"/>
@@ -388,7 +417,6 @@ function MapScreen({posts,viewer,matTran,onSelectMt,onSelectCenter,logoUrl,onUpl
 
       {/* BOTTOM */}
       <div style={{position:"absolute",bottom:0,left:0,right:0,padding:"28px 16px 16px",background:`linear-gradient(to top,${C.bg} 65%,transparent)`,pointerEvents:"none"}}>
-        {viewer?.loaiHinh==="thuongtru"&&<div style={{pointerEvents:"auto",marginBottom:12}}><Countdown/></div>}
         <div style={{background:"#ffffffee",borderRadius:18,padding:"14px 18px",border:`1px solid ${C.bdr}`,boxShadow:`0 4px 20px ${C.pri}11`,pointerEvents:"auto",backdropFilter:"blur(8px)"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{flex:1}}>
@@ -403,6 +431,7 @@ function MapScreen({posts,viewer,matTran,onSelectMt,onSelectCenter,logoUrl,onUpl
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }
@@ -428,6 +457,168 @@ function FeedScreen({posts,viewer,allUsers,matTran,filterMt,onLike,onComment,onB
   );
 }
 
+
+// ═══════════════════════════════════════════════
+//  CREATE USER MODAL (Admin tạo tài khoản)
+// ═══════════════════════════════════════════════
+function CreateUserModal({matTran, onClose, onSave}) {
+  const [form,setForm]=useState({
+    hoTen:"",email:"",sdt:"",mssv:"",
+    donViType:"Khoa",donViTen:"",
+    cccd:"",ngayCap:"",
+    matTranId:"",loaiHinh:"thuongtru",
+    role:"chiensi"
+  });
+  const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const [err,setErr]=useState({});
+
+  const validate=()=>{
+    const e={};
+    if(!form.hoTen.trim()) e.hoTen="Vui lòng nhập họ tên";
+    if(!form.email.includes("@")) e.email="Email không hợp lệ";
+    if(!form.mssv.trim()) e.mssv="Vui lòng nhập MSSV/MSNV";
+    setErr(e); return !Object.keys(e).length;
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"#00000077",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:"#fff",borderRadius:22,padding:"24px 22px",width:"100%",maxWidth:500,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 16px 60px #0003"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h3 style={{margin:0,color:C.txt,fontSize:18,fontWeight:800}}>➕ Tạo tài khoản mới</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:"#94a3b8"}}>×</button>
+        </div>
+
+        <div style={{background:C.deep,borderRadius:12,padding:"12px 16px",marginBottom:18,fontSize:13,color:C.mid,fontWeight:600}}>
+          🔐 Mật khẩu mặc định: <strong>{DEFAULT_PWD}</strong> · Người dùng có thể đổi sau
+        </div>
+
+        {err.submit&&<div style={{background:C.errBg,color:C.err,padding:"10px 14px",borderRadius:10,fontSize:14,marginBottom:14,fontWeight:700}}>{err.submit}</div>}
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{gridColumn:"1/-1"}}><Input label="Họ và tên *" placeholder="Nguyễn Văn A" value={form.hoTen} onChange={e=>upd("hoTen",e.target.value)} error={err.hoTen}/></div>
+          <Input label="Email *" type="email" placeholder="email@iuh.edu.vn" value={form.email} onChange={e=>upd("email",e.target.value)} error={err.email}/>
+          <Input label="Số điện thoại" placeholder="09xxxxxxxx" value={form.sdt} onChange={e=>upd("sdt",e.target.value)}/>
+          <Input label="MSSV/MSNV *" placeholder="21xxxxxxxx" value={form.mssv} onChange={e=>upd("mssv",e.target.value)} error={err.mssv}/>
+          <div>
+            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Loại đơn vị</label>
+            <select value={form.donViType} onChange={e=>upd("donViType",e.target.value)} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:C.txt,outline:"none",boxSizing:"border-box"}}>
+              {["Khoa","Viện","CLB"].map(d=><option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+          <div style={{gridColumn:"1/-1"}}><Input label="Tên đơn vị" placeholder="Khoa Xây dựng" value={form.donViTen} onChange={e=>upd("donViTen",e.target.value)}/></div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:4}}>
+          <div>
+            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Vai trò *</label>
+            <select value={form.role} onChange={e=>upd("role",e.target.value)} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:C.txt,outline:"none",boxSizing:"border-box"}}>
+              {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Loại hình</label>
+            <select value={form.loaiHinh} onChange={e=>upd("loaiHinh",e.target.value)} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:C.txt,outline:"none",boxSizing:"border-box"}}>
+              <option value="thuongtru">📌 Thường trực</option>
+              <option value="khongthuongtru">🔄 Không thường trực</option>
+            </select>
+          </div>
+          <div style={{gridColumn:"1/-1"}}>
+            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Mặt trận</label>
+            <select value={form.matTranId} onChange={e=>upd("matTranId",e.target.value)} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:C.txt,outline:"none",boxSizing:"border-box"}}>
+              <option value="">-- Chưa phân mặt trận --</option>
+              {matTran.map(m=><option key={m.id} value={m.id}>{m.emoji} {m.name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{display:"flex",gap:10,marginTop:18}}>
+          <Btn variant="outline" style={{flex:1,padding:"13px"}} onClick={onClose}>Hủy</Btn>
+          <Btn style={{flex:2,padding:"13px"}} onClick={()=>{if(validate()) onSave(form);}}>✅ Tạo tài khoản</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+//  EDIT USER MODAL (Admin sửa tài khoản)
+// ═══════════════════════════════════════════════
+function EditUserModal({user, matTran, onClose, onSave}) {
+  const [form,setForm]=useState({
+    hoTen:user.hoTen||"",
+    email:user.email||"",
+    sdt:user.sdt||"",
+    mssv:user.mssv||"",
+    donViType:user.donViType||"Khoa",
+    donViTen:user.donViTen||"",
+    matTranId:user.matTranId||"",
+    loaiHinh:user.loaiHinh||"thuongtru",
+    role:user.role||"chiensi"
+  });
+  const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const ri=getRoleInfo(form.role);
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"#00000077",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:"#fff",borderRadius:22,padding:"24px 22px",width:"100%",maxWidth:500,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 16px 60px #0003"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+          <h3 style={{margin:0,color:C.txt,fontSize:18,fontWeight:800}}>✏️ Sửa tài khoản</h3>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:"#94a3b8"}}>×</button>
+        </div>
+
+        {/* Role highlight */}
+        <div style={{background:`${ri.color}11`,border:`1.5px solid ${ri.color}33`,borderRadius:12,padding:"10px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+          <Badge color={ri.color} size={14}>{ri.label}</Badge>
+          <span style={{color:"#94a3b8",fontSize:13}}>· {form.loaiHinh==="thuongtru"?"Thường trực":"Không thường trực"}</span>
+        </div>
+
+        <Input label="Họ và tên" value={form.hoTen} onChange={e=>upd("hoTen",e.target.value)}/>
+        <Input label="Email" type="email" value={form.email} onChange={e=>upd("email",e.target.value)}/>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:4}}>
+          <Input label="SĐT" value={form.sdt} onChange={e=>upd("sdt",e.target.value)}/>
+          <Input label="MSSV/MSNV" value={form.mssv} onChange={e=>upd("mssv",e.target.value)}/>
+          <div>
+            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Loại đơn vị</label>
+            <select value={form.donViType} onChange={e=>upd("donViType",e.target.value)} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:C.txt,outline:"none",boxSizing:"border-box"}}>
+              {["Khoa","Viện","CLB"].map(d=><option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+          <Input label="Tên đơn vị" value={form.donViTen} onChange={e=>upd("donViTen",e.target.value)}/>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          <div>
+            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Vai trò</label>
+            <select value={form.role} onChange={e=>upd("role",e.target.value)} style={{width:"100%",background:C.bg,border:`2px solid ${ri.color}55`,borderRadius:10,padding:"11px 12px",fontSize:14,color:ri.color,fontWeight:700,outline:"none",boxSizing:"border-box"}}>
+              {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Loại hình</label>
+            <select value={form.loaiHinh} onChange={e=>upd("loaiHinh",e.target.value)} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:C.txt,outline:"none",boxSizing:"border-box"}}>
+              <option value="thuongtru">📌 Thường trực</option>
+              <option value="khongthuongtru">🔄 Không thường trực</option>
+            </select>
+          </div>
+          <div style={{gridColumn:"1/-1"}}>
+            <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:5}}>Mặt trận</label>
+            <select value={form.matTranId} onChange={e=>upd("matTranId",e.target.value)} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"11px 12px",fontSize:14,color:C.txt,outline:"none",boxSizing:"border-box"}}>
+              <option value="">-- Chưa phân mặt trận --</option>
+              {matTran.map(m=><option key={m.id} value={m.id}>{m.emoji} {m.name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{display:"flex",gap:10}}>
+          <Btn variant="outline" style={{flex:1,padding:"13px"}} onClick={onClose}>Hủy</Btn>
+          <Btn style={{flex:2,padding:"13px"}} onClick={()=>onSave(form)}>💾 Lưu thay đổi</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════
 //  ADMIN SCREEN (full CRUD)
 // ═══════════════════════════════════════════════
@@ -437,6 +628,8 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
   const [marq,setMarq]=useState(marqueeText||"");
   const [newMt,setNewMt]=useState({name:"",emoji:"🌿",color:"#16a34a",loaiHinh:"thuongtru"});
   const [editMt,setEditMt]=useState(null);
+  const [showCreateUser,setShowCreateUser]=useState(false);
+  const [editUser,setEditUser]=useState(null);
   const logoRef=useRef();
   const handleLogo=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>onUploadLogo(ev.target.result);r.readAsDataURL(f);};
 
@@ -490,8 +683,11 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
 
         {/* USERS */}
         {tab==="users"&&<>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Tìm theo tên, MSSV, email..."
-            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:`2px solid ${C.bdr}`,borderRadius:14,padding:"12px 16px",fontSize:15,outline:"none",color:C.txt,marginBottom:14}}/>
+          <div style={{display:"flex",gap:10,marginBottom:14}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Tìm theo tên, MSSV, email..."
+              style={{flex:1,boxSizing:"border-box",background:"#fff",border:`2px solid ${C.bdr}`,borderRadius:14,padding:"12px 16px",fontSize:15,outline:"none",color:C.txt}}/>
+            <Btn onClick={()=>setShowCreateUser(true)} style={{padding:"12px 16px",fontSize:14,whiteSpace:"nowrap"}}>➕ Tạo tài khoản</Btn>
+          </div>
           {filtered.map(u=>{
             const ri=getRoleInfo(u.role);
             const mt=matTran.find(m=>m.id===u.matTranId);
@@ -499,7 +695,10 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
               <div key={u.id} style={{background:"#fff",borderRadius:16,padding:"14px 16px",marginBottom:10,border:`1px solid ${C.bdr}`}}>
                 <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
                   <div style={{flex:1}}>
-                    <div style={{fontWeight:800,color:C.txt,fontSize:16}}>{u.hoTen}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{fontWeight:800,color:u.locked?C.err:C.txt,fontSize:16}}>{u.hoTen}</div>
+                      {u.locked&&<span style={{background:"#fef2f2",color:C.err,fontSize:11,fontWeight:800,padding:"2px 8px",borderRadius:20,border:"1px solid #fecaca"}}>🔒 Bị khóa</span>}
+                    </div>
                     <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
                       <Badge color={ri.color} size={13}>{ri.label}</Badge>
                       {mt&&<Badge color={mt.color} size={13}>{mt.emoji} {mt.name}</Badge>}
@@ -507,9 +706,14 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
                     </div>
                     <div style={{color:"#94a3b8",fontSize:13,marginTop:6}}>{u.mssv} · {u.email}</div>
                   </div>
-                  <select value={u.role} onChange={e=>onUpdateRole(u.id,e.target.value)} style={{background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"6px 10px",fontSize:13,color:C.txt,outline:"none",flexShrink:0}}>
-                    {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
-                  </select>
+                  <div style={{display:"flex",gap:8,flexShrink:0}}>
+                    <select value={u.role} onChange={e=>onUpdateRole(u.id,e.target.value)} style={{background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:10,padding:"6px 10px",fontSize:13,color:C.txt,outline:"none"}}>
+                      {ROLES.map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
+                    </select>
+                    <button onClick={()=>setEditUser(u)} style={{background:C.deep,border:`1px solid ${C.bdrM}`,borderRadius:10,padding:"6px 12px",cursor:"pointer",color:C.pri,fontSize:13,fontWeight:700}}>✏️</button>
+                    <button onClick={async()=>{if(window.confirm(`Reset mật khẩu "${u.hoTen}" về mhxiuh26?`)){await authUsers.update(u.id,{password:hashPwd(DEFAULT_PWD)});alert("✅ Đã reset mật khẩu!");}}} style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"6px 10px",cursor:"pointer",color:"#c2410c",fontSize:13,fontWeight:700}} title="Reset mật khẩu">🔑</button>
+                    <button onClick={async()=>{const locked=!u.locked;await authUsers.update(u.id,{locked});const users2=await db.get("users")||{};onUpdateRole(u.id,u.role);}} style={{background:u.locked?"#fef2f2":"#f8fafc",border:`1px solid ${u.locked?"#fecaca":"#e2e8f0"}`,borderRadius:10,padding:"6px 10px",cursor:"pointer",color:u.locked?C.err:"#94a3b8",fontSize:13,fontWeight:700}} title={u.locked?"Mở khóa":"Khóa tài khoản"}>{u.locked?"🔒":"🔓"}</button>
+                  </div>
                 </div>
               </div>
             );
@@ -552,6 +756,13 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
                     <input value={m.emoji} onChange={e=>onEditMt({...m,emoji:e.target.value})} style={{flex:1,background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:12,padding:"10px",fontSize:22,textAlign:"center",outline:"none"}}/>
                     <input type="color" value={m.color} onChange={e=>onEditMt({...m,color:e.target.value})} style={{flex:1,height:46,border:`2px solid ${C.bdr}`,borderRadius:12,cursor:"pointer"}}/>
                   </div>
+                  <div style={{marginBottom:12}}>
+                    <label style={{display:"block",fontWeight:700,color:C.txt,fontSize:14,marginBottom:6}}>Loại hình mặt trận</label>
+                    <select value={m.loaiHinh||"thuongtru"} onChange={e=>onEditMt({...m,loaiHinh:e.target.value})} style={{width:"100%",background:C.bg,border:`2px solid ${C.bdr}`,borderRadius:12,padding:"11px 14px",fontSize:15,color:C.txt,outline:"none",boxSizing:"border-box"}}>
+                      <option value="thuongtru">📌 Thường trực</option>
+                      <option value="khongthuongtru">🔄 Không thường trực</option>
+                    </select>
+                  </div>
                   <div style={{display:"flex",gap:10}}>
                     <Btn variant="outline" style={{flex:1,padding:"10px"}} onClick={()=>setEditMt(null)}>Hủy</Btn>
                     <Btn style={{flex:1,padding:"10px"}} onClick={()=>setEditMt(null)}>✅ Lưu</Btn>
@@ -576,6 +787,9 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
         </>}
 
         {/* SETTINGS */}
+        {/* REQUESTS TAB */}
+        {tab==="requests"&&<ResetRequestsPanel allUsers={allUsers} matTran={matTran}/>}
+
         {tab==="settings"&&<>
           {/* Logo upload */}
           <div style={{background:"#fff",borderRadius:18,padding:"20px",marginBottom:16,border:`1px solid ${C.bdr}`}}>
@@ -634,6 +848,25 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
         </>}
       </div>
     </div>
+
+      {/* CREATE USER MODAL */}
+      {showCreateUser&&<CreateUserModal matTran={matTran} onClose={()=>setShowCreateUser(false)} onSave={async(data)=>{
+        const users=await db.get("users")||{};
+        if(Object.values(users).find(u=>u.email===data.email)){alert("Email đã tồn tại!");return;}
+        const id=uid();
+        users[id]={id,...data,password:hashPwd(DEFAULT_PWD),createdAt:now(),approved:true};
+        await db.set("users",users);
+        onUpdateRole(id,data.role);
+        setShowCreateUser(false);
+      }}/>}
+
+      {/* EDIT USER MODAL */}
+      {editUser&&<EditUserModal user={editUser} matTran={matTran} onClose={()=>setEditUser(null)} onSave={async(data)=>{
+        await authUsers.update(editUser.id,data);
+        const users=await db.get("users")||{};
+        onUpdateRole(editUser.id,data.role);
+        setEditUser(null);
+      }}/>}
   );
 }
 
@@ -742,10 +975,138 @@ function ProfileScreen({viewer,posts,matTran,onLogout,onChangePwd}) {
   );
 }
 
+
+// ═══════════════════════════════════════════════
+//  FORGOT PASSWORD SCREEN
+// ═══════════════════════════════════════════════
+function ForgotPwdScreen({onBack, onSubmit}) {
+  const [email,setEmail] = useState("");
+  const [status,setStatus] = useState(null);
+  const [loading,setLoading] = useState(false);
+
+  const submit = async () => {
+    if(!email.includes("@")){setStatus({error:"Email không hợp lệ"});return;}
+    setLoading(true);
+    const res = await onSubmit(email.trim().toLowerCase());
+    setLoading(false);
+    setStatus(res);
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:`linear-gradient(160deg,${C.priD},${C.pri} 50%,${C.acc})`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px 16px",fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
+      <div style={{width:"100%",maxWidth:440}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{fontSize:52,marginBottom:10}}>🔐</div>
+          <h1 style={{color:"#fff",margin:"0 0 6px",fontSize:26,fontWeight:900}}>Quên mật khẩu</h1>
+          <p style={{color:"#bbf7d0",margin:0,fontSize:14}}>Gửi yêu cầu reset mật khẩu đến admin</p>
+        </div>
+        <div style={{background:"#fff",borderRadius:22,padding:"28px 24px",boxShadow:`0 20px 60px ${C.priD}44`}}>
+          {status?.error&&<div style={{background:C.errBg,color:C.err,padding:"12px 16px",borderRadius:12,fontSize:14,marginBottom:16,fontWeight:700}}>{status.error}</div>}
+          {status?.success?(
+            <div style={{textAlign:"center",padding:"20px 0"}}>
+              <div style={{fontSize:48,marginBottom:12}}>✅</div>
+              <div style={{fontWeight:800,color:C.txt,fontSize:17,marginBottom:8}}>Đã gửi yêu cầu!</div>
+              <div style={{color:"#94a3b8",fontSize:14,lineHeight:1.6}}>Admin sẽ reset mật khẩu cho bạn về <strong>{DEFAULT_PWD}</strong> trong thời gian sớm nhất.</div>
+              <button onClick={onBack} style={{marginTop:20,background:`linear-gradient(135deg,${C.priL},${C.pri})`,border:"none",borderRadius:12,padding:"12px 28px",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer"}}>← Quay lại đăng nhập</button>
+            </div>
+          ):(
+            <>
+              <Input label="Email tài khoản của bạn" type="email" placeholder="email@iuh.edu.vn" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
+              <Btn full onClick={submit} disabled={loading}>{loading?"Đang gửi...":"📨 Gửi yêu cầu reset"}</Btn>
+              <div style={{textAlign:"center",marginTop:14}}>
+                <button onClick={onBack} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,textDecoration:"underline"}}>← Quay lại đăng nhập</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+//  RESET REQUESTS PANEL (in Admin)
+// ═══════════════════════════════════════════════
+function ResetRequestsPanel({allUsers}) {
+  const [reqs,setReqs] = useState([]);
+
+  useEffect(()=>{
+    (async()=>{
+      const r = await db.get("resetRequests")||[];
+      setReqs(r);
+    })();
+  },[]);
+
+  const handleReset = async (req) => {
+    if(!window.confirm(`Reset mật khẩu cho ${req.hoTen} (${req.email}) về ${DEFAULT_PWD}?`)) return;
+    await authUsers.update(req.userId,{password:hashPwd(DEFAULT_PWD)});
+    const updated = reqs.map(r=>r.id===req.id?{...r,done:true,doneAt:Date.now()}:r);
+    setReqs(updated);
+    await db.set("resetRequests",updated);
+    alert(`✅ Đã reset mật khẩu cho ${req.hoTen}!`);
+  };
+
+  const handleDelete = async (id) => {
+    const updated = reqs.filter(r=>r.id!==id);
+    setReqs(updated);
+    await db.set("resetRequests",updated);
+  };
+
+  const pending = reqs.filter(r=>!r.done);
+  const done    = reqs.filter(r=>r.done);
+
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+        <div style={{fontWeight:800,color:C.txt,fontSize:16}}>🔔 Yêu cầu reset mật khẩu</div>
+        {pending.length>0&&<span style={{background:C.ora,color:"#fff",fontSize:12,fontWeight:800,padding:"2px 10px",borderRadius:20}}>{pending.length} chờ xử lý</span>}
+      </div>
+
+      {pending.length===0&&(
+        <div style={{textAlign:"center",padding:"40px 0",color:"#94a3b8"}}>
+          <div style={{fontSize:40}}>✅</div>
+          <div style={{marginTop:8,fontWeight:700}}>Không có yêu cầu nào đang chờ</div>
+        </div>
+      )}
+
+      {pending.map(req=>(
+        <div key={req.id} style={{background:"#fff7ed",border:"1.5px solid #fed7aa",borderRadius:16,padding:"14px 16px",marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{fontSize:28}}>🔐</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:800,color:C.txt,fontSize:15}}>{req.hoTen}</div>
+              <div style={{color:"#94a3b8",fontSize:13}}>{req.email}</div>
+              <div style={{color:"#c2410c",fontSize:12,marginTop:3}}>{tAgo(req.createdAt)}</div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>handleReset(req)} style={{background:`linear-gradient(135deg,${C.priL},${C.pri})`,border:"none",borderRadius:10,padding:"8px 14px",cursor:"pointer",color:"#fff",fontWeight:800,fontSize:13}}>🔑 Reset</button>
+              <button onClick={()=>handleDelete(req.id)} style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"8px 10px",cursor:"pointer",color:C.err,fontSize:13}}>✕</button>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {done.length>0&&<>
+        <div style={{fontWeight:700,color:"#94a3b8",fontSize:13,margin:"20px 0 10px"}}>Đã xử lý ({done.length})</div>
+        {done.slice(0,5).map(req=>(
+          <div key={req.id} style={{background:C.bg,border:`1px solid ${C.bdr}`,borderRadius:12,padding:"12px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,opacity:.7}}>
+            <div style={{fontSize:22}}>✅</div>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,color:C.txt,fontSize:14}}>{req.hoTen}</div>
+              <div style={{color:"#94a3b8",fontSize:12}}>{req.email} · Đã reset {req.doneAt?tAgo(req.doneAt):""}}</div>
+            </div>
+            <button onClick={()=>handleDelete(req.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#94a3b8",fontSize:16}}>✕</button>
+          </div>
+        ))}
+      </>}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════
 //  LOGIN SCREEN
 // ═══════════════════════════════════════════════
-function LoginScreen({onLogin,onGoRegister,logoUrl}) {
+function LoginScreen({onLogin,onGoRegister,onForgotPwd,logoUrl}) {
   const [email,setEmail]=useState("");
   const [pwd,setPwd]=useState("");
   const [err,setErr]=useState("");
@@ -774,7 +1135,10 @@ function LoginScreen({onLogin,onGoRegister,logoUrl}) {
           <Input label="Mật khẩu" type="password" placeholder="••••••••" value={pwd} onChange={e=>setPwd(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
           <Btn full onClick={submit} disabled={loading}>{loading?"Đang đăng nhập...":"Đăng nhập 🚀"}</Btn>
           <div style={{textAlign:"center",marginTop:18,fontSize:15,color:"#94a3b8"}}>Chưa có tài khoản? <button onClick={onGoRegister} style={{background:"none",border:"none",color:C.pri,fontWeight:800,cursor:"pointer",fontSize:15}}>Đăng ký ngay</button></div>
-          <div style={{textAlign:"center",marginTop:10,fontSize:13,color:"#cbd5e1"}}>Mật khẩu mặc định: <strong>{DEFAULT_PWD}</strong></div>
+          <div style={{textAlign:"center",marginTop:10}}>
+            <button onClick={onForgotPwd} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,textDecoration:"underline"}}>Quên mật khẩu? Gửi yêu cầu reset</button>
+          </div>
+          <div style={{textAlign:"center",marginTop:8,fontSize:13,color:"#cbd5e1"}}>Mật khẩu mặc định: <strong>{DEFAULT_PWD}</strong></div>
         </div>
         <div style={{textAlign:"center",marginTop:20,color:"#ffffff88",fontSize:12}}>Built & Developed by Nguyen Thai Tan · Faculty of Civil Engineering IUH · Youth Union & Student Association IUH 2026</div>
       </div>
@@ -943,8 +1307,20 @@ export default function App() {
     </div>
   );
 
-  if(screen==="auth") return <LoginScreen onLogin={login} onGoRegister={()=>setScreen("register")} logoUrl={logoUrl}/>;
+  if(screen==="auth") return <LoginScreen onLogin={login} onGoRegister={()=>setScreen("register")} onForgotPwd={()=>setScreen("forgotpwd")} logoUrl={logoUrl}/>;
   if(screen==="register") return <RegisterScreen onBack={()=>setScreen("auth")} onSuccess={login} matTran={matTran}/>;
+  if(screen==="forgotpwd") return <ForgotPwdScreen onBack={()=>setScreen("auth")} onSubmit={async(email)=>{
+    const users=await db.get("users")||{};
+    const u=Object.values(users).find(u=>u.email===email);
+    if(!u){return {error:"Email không tồn tại"};}
+    // Create reset request
+    const reqs=await db.get("resetRequests")||[];
+    const existing=reqs.find(r=>r.email===email&&!r.done);
+    if(existing){return {error:"Bạn đã gửi yêu cầu rồi, chờ admin xử lý!"};}
+    reqs.unshift({id:uid(),email,hoTen:u.hoTen,userId:u.id,createdAt:now(),done:false});
+    await db.set("resetRequests",reqs);
+    return {success:true};
+  }}/>;
 
   const TABS=[
     {id:"map",  icon:"🗺️", label:"Mặt trận"},
