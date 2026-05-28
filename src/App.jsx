@@ -840,15 +840,10 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
                 <option value="khongthuongtru">🔄 Không thường trực</option>
               </select>
             </div>
-            <Btn full onClick={()=>{if(!newMt.name.trim())return;(()=>{
-                  // Place new node in circle, spaced from existing ones
-                  const existing=matTran.length;
-                  const angle=(existing*(360/(Math.max(existing+1,8))))*(Math.PI/180);
-                  const rx=34, ry=28; // ellipse radii around center 47,40
-                  const nx=Math.round(47+rx*Math.cos(angle));
-                  const ny=Math.round(40+ry*Math.sin(angle));
-                  onAddMt({...newMt,id:"mt"+uid(),x:Math.max(5,Math.min(90,nx)),y:Math.max(8,Math.min(75,ny))});
-                })();setNewMt({name:"",emoji:"🌿",color:"#16a34a",loaiHinh:"thuongtru"});}}>Thêm mặt trận</Btn>
+            <Btn full onClick={()=>{if(!newMt.name.trim())return;onAddMt({...newMt,id:"mt"+uid(),
+                  x:Math.max(5,Math.min(90,Math.round(47+34*Math.cos((matTran.length*(360/Math.max(matTran.length+1,8)))*(Math.PI/180))))),
+                  y:Math.max(8,Math.min(75,Math.round(40+28*Math.sin((matTran.length*(360/Math.max(matTran.length+1,8)))*(Math.PI/180)))))
+                });setNewMt({name:"",emoji:"🌿",color:"#16a34a",loaiHinh:"thuongtru"});}}>Thêm mặt trận</Btn>
           </div>
 
           {/* List + Edit/Delete */}
@@ -935,8 +930,6 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
           </div>
         </>}
       </div>
-    </div>
-
       {/* CREATE USER MODAL */}
       {showCreateUser&&<CreateUserModal matTran={matTran} onClose={()=>setShowCreateUser(false)} onSave={async(data)=>{
         const users=await db.get("users")||{};
@@ -955,6 +948,7 @@ function AdminScreen({allUsers,matTran,posts,onAddMt,onEditMt,onDeleteMt,onUpdat
         onUpdateRole(editUser.id,data.role);
         setEditUser(null);
       }}/>}
+    </div>
   );
 }
 
@@ -1181,7 +1175,7 @@ function ResetRequestsPanel({allUsers}) {
             <div style={{fontSize:22}}>✅</div>
             <div style={{flex:1}}>
               <div style={{fontWeight:700,color:C.txt,fontSize:14}}>{req.hoTen}</div>
-              <div style={{color:"#94a3b8",fontSize:12}}>{req.email} · Đã reset {req.doneAt?tAgo(req.doneAt):""}}</div>
+              <div style={{color:"#94a3b8",fontSize:12}}>{req.email} · Đã reset {req.doneAt?tAgo(req.doneAt):""}</div>
             </div>
             <button onClick={()=>handleDelete(req.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#94a3b8",fontSize:16}}>✕</button>
           </div>
